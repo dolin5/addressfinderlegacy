@@ -60,18 +60,49 @@
 
         map.layers.forEach(function(layer, index) {
           if (layer.title === "Structures"){
-            sourcePromises.push(getOldAddressesSearchLayerData(layer));
-            searchSourceLayers.push({title:"Old Addresses"});
-            sourcePromises.push(getSearchLayerData(layer));            
-            searchSourceLayers.push(layer);            
+            if (layer.loaded){
+              searchWidget.sources.push( {
+                layer: layer,
+                searchFields: ["ADDRESS"],
+                suggestionTemplate: "{ADDRESS} {DIRPRE} {ROADNAME} {ROADTYPE} {DIRSUF}",
+                exactMatch: true,
+                maxSuggestions: 10000,
+                outFields: ["ADDRESS", "DIRPRE", "ROADNAME", "ROADTYPE", "DIRSUF"],
+                name: "structures",
+                placeholder: "311 w main st"//,
+                //getSuggestions:getStructureSuggestions,
+              });
+            }
+            else {
+              layer.when(function(layer){
+                searchWidget.sources.push( {
+                  layer: layer,
+                  searchFields: ["ADDRESS"],
+                  suggestionTemplate: "{ADDRESS} {DIRPRE} {ROADNAME} {ROADTYPE} {DIRSUF}",
+                  exactMatch: true,
+                  maxSuggestions: 10000,
+                  outFields: ["ADDRESS", "DIRPRE", "ROADNAME", "ROADTYPE", "DIRSUF"],
+                  name: "structures",
+                  placeholder: "311 w main st"//,
+                  //getSuggestions:getStructureSuggestions,
+                });              
+              });
+
+            }
+            
+            
+            //sourcePromises.push(getOldAddressesSearchLayerData(layer));
+            //searchSourceLayers.push({title:"Old Addresses"});
+            //sourcePromises.push(getSearchLayerData(layer));            
+            //searchSourceLayers.push(layer);            
             
           }
-          if (["Recent Addresses", "Retired Addresses"].indexOf(layer.title) >= 0) {
-            sourcePromises.push(getSearchLayerData(layer));
-            searchSourceLayers.push(layer);
-          }
+          //if (["Recent Addresses", "Retired Addresses"].indexOf(layer.title) >= 0) {
+          //  sourcePromises.push(getSearchLayerData(layer));
+          //  searchSourceLayers.push(layer);
+          //}
         })
-        promiseUtils.eachAlways(sourcePromises).then(buildSearchLayers).then(updateSources);
+        //promiseUtils.eachAlways(sourcePromises).then(buildSearchLayers).then(updateSources);
 
         addressMasterTable = new FeatureLayer({
           url: map.tables[0].url
@@ -174,7 +205,7 @@
             suggestionsEnabled: true,
             getSuggestions: getSuggestions
           };
-        });
+        });        
         searchWidget.allPlaceholder = "311 w main st";
       };
 
