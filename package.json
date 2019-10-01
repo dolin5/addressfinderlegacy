@@ -1,0 +1,28 @@
+{
+  "name": "addresfinder",
+  "version": "1.0.0",
+  "description": "",
+  "dependencies": {
+    "babel-polyfill": "^6.26.0",
+    "jshint": "^2.10.2"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.6.2",
+    "@babel/core": "^7.6.2",
+    "babel-html": "^0.5.1"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "babel-commit": "babel-html -s src -d lib"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dolin5/addressfinder.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dolin5/addressfinder/issues"
+  },
+  "homepage": "https://github.com/dolin5/addressfinder#readme"
+}

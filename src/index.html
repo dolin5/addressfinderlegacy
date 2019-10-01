@@ -1,0 +1,255 @@
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <!--
+  ArcGIS API for JavaScript, https://js.arcgis.com
+  For more information about the widgets-search-multiplesource sample, read the original sample description at developers.arcgis.com.
+  https://developers.arcgis.com/javascript/latest/sample-code/widgets-search-multiplesource/index.html
+  -->
+  <title>Search widget with multiple sources - 4.12</title>
+
+  <style>
+    html,
+    body,
+    #viewDiv {
+      padding: 0;
+      margin: 0;
+      height: 100%;
+      width: 100%;
+    }
+  </style>
+  <script crossorigin="anonymous" src="https://polyfill.io/v3/polyfill.min.js?flags=gated&features=es5%2Ces7%2Ces6"></script>
+
+  <link rel="stylesheet" href="https://js.arcgis.com/4.11/esri/themes/light/main.css" />
+  <script src="https://js.arcgis.com/4.11/"></script>
+
+  <script>
+    require([
+      "esri/WebMap",
+      "esri/views/MapView",
+      "esri/layers/FeatureLayer",
+      "esri/widgets/Search",
+      "esri/core/promiseUtils"
+    ], function(WebMap, MapView, FeatureLayer, Search, promiseUtils) {
+      var structures;
+      var searchSourceLayers = [];
+      var searchSourceLayersPromiseList;
+      var recentAddresses;
+      var retiredAddresses;
+      var addressMasterTable;
+      var searchWidget;
+
+
+      var map = new WebMap({
+        portalItem: {
+          id: "abbe4d6454854f4bab38d82b54a359e9"
+        }
+      });
+
+      var view = new MapView({
+        container: "viewDiv",
+        map: map,
+        center: [-111.15, 45.7], // lon, lat
+        scale: 200000
+      });
+      map.load().then(function() {
+        console.log(map);
+        var sourcePromises = [];
+
+        map.layers.forEach(function(layer, index) {
+          if (layer.title === "Structures"){
+            sourcePromises.push(getOldAddressesSearchLayerData(layer));
+            searchSourceLayers.push({title:"Old Addresses"});
+            sourcePromises.push(getSearchLayerData(layer));            
+            searchSourceLayers.push(layer);            
+            
+          }
+          if (["Recent Addresses", "Retired Addresses"].indexOf(layer.title) >= 0) {
+            sourcePromises.push(getSearchLayerData(layer));
+            searchSourceLayers.push(layer);
+          }
+        })
+        promiseUtils.eachAlways(sourcePromises).then(buildSearchLayers).then(updateSources);
+
+        addressMasterTable = new FeatureLayer({
+          url: map.tables[0].url
+        });
+
+      });
+
+
+      searchWidget = new Search({
+        view: view,
+        allPlaceholder: "wait...",
+        includeDefaultSources: false,
+        state: "disabled",
+        autoSelect: false
+      });
+
+
+      searchWidget.on("search-start", function(event) {
+        console.log(event);
+      });
+
+      // Add the search widget to the top left corner of the view
+      view.ui.add(searchWidget, {
+        position: "top-right"
+      });
+
+
+
+      function getSearchLayerData(layer) {
+        var searchQuery = layer.createQuery();
+        searchQuery.where = "1=1";
+        searchQuery.outSpatialReference = view.spatialReference;
+        searchQuery.outFields = ["OBJECTID", "ADDRESS", "DIRPRE", "ROADNAME", "ROADTYPE", "DIRSUF","LV_APT"];
+        return layer.queryFeatures(searchQuery);
+      }
+
+      function getOldAddressesSearchLayerData(layer) {
+        var searchQuery = layer.createQuery();
+        searchQuery.where = "1=1";
+        searchQuery.outSpatialReference = view.spatialReference;
+        searchQuery.outFields = ["OBJECTID", "OLD_ADDRESS", "OLD_DIRPRE", "OLD_ROADNAME", "OLD_ROADTYPE", "OLD_DIRSUF"];
+        return layer.queryFeatures(searchQuery);
+      }
+
+      function buildSearchLayers(results) {
+        return results.map(function(response, index) {
+          console.log(response);
+          console.log(searchSourceLayers);
+          var fullAddressFieldObject = Object.assign(response.value.fields[3]);
+          fullAddressFieldObject.name = "FULLADDRESS";
+          fullAddressFieldObject.alias = "FULLADDRESS";
+          response.value.features.forEach(function(feature) {
+            feature.attributes["FULLADDRESS"] = fullAddressMaker(feature,searchSourceLayers[index].title);
+          });
+          var sourceLayer = new FeatureLayer({
+            source: response.value.features,
+            fields: response.value.fields.concat(fullAddressFieldObject),
+            outFields: ["*"],
+            objectIdField: "OBJECTID",
+            title: searchSourceLayers[index].title,
+            visible: true
+          });
+          map.layers.add(sourceLayer);
+          return sourceLayer;
+        });
+      };
+
+      function fullAddressMaker(feature,title) {
+        var attributes = feature.attributes
+        Object.keys(attributes).forEach(function(key) {
+          if (attributes[key] === null) {
+            attributes[key] = '';
+          }
+          if (typeof attributes[key].replace === 'function') {
+            attributes[key] = attributes[key].replace(/  +/g, ' ').trim();
+          }
+        })
+        var fullAddress;
+        if (title == "Old Addresses"){
+          fullAddress = (attributes.OLD_ADDRESS + " " + attributes.OLD_DIRPRE + " " + attributes.OLD_ROADNAME + " " + attributes.OLD_ROADTYPE + " " + attributes.OLD_DIRSUF).replace(/  +/g, ' ').trim();        
+        } else {
+          fullAddress = (attributes.ADDRESS + " " + attributes.DIRPRE + " " + attributes.ROADNAME + " " + attributes.ROADTYPE + " " + attributes.DIRSUF + " " + attributes.LV_APT).replace(/  +/g, ' ').trim();        
+        }
+        return fullAddress;
+      }
+
+      function updateSources(layers) {
+        searchWidget.sources = layers.reverse().map(function(layer, index) {
+          return {
+            layer: layer,
+            searchFields: ["FULLADDRESS"],
+            suggestionTemplate: "{FULLADDRESS}",
+            name: layer.title,
+            maxSuggestions: 6,
+            maxResults: 6,
+            placeholder: "311 w main st",
+            outFields: ["*"],
+            zoomScale: 1000,
+            exactMatch: false,
+            suggestionsEnabled: true,
+            getSuggestions: getSuggestions
+          };
+        });
+        searchWidget.allPlaceholder = "311 w main st";
+      };
+
+      function getSuggestions(params) {
+        var someFunction = function(items, params) {
+          return new Promise(function(resolve, reject) {
+            var results = items.filter(function(feature) {
+              return feature.attributes.FULLADDRESS.startsWith(params.suggestTerm.toUpperCase())
+            }).slice(0, 7).map(function(feature) {
+              return {
+                key: "FULLADDRESS",
+                text: feature.attributes.FULLADDRESS,
+                index: params.sourceIndex
+              }
+            });
+            resolve(results);
+          });
+        }
+        return someFunction(this.layer.source.items, params);
+      }
+
+      function getResults(params) {
+        // If the Search widget passes the current location,
+        // you can use this in your own custom source
+        var operation = params.location ? "reverse/" : "search/";
+        var query = {};
+        // You can perform a different query if a location
+        // is provided
+        if (params.location) {
+          query.lat = params.location.latitude;
+          query.lon = params.location.longitude;
+        } else {
+          query.q = params.suggestResult.text.replace(/ /g, "+");
+          query.limit = 6;
+        }
+        return esriRequest(url + operation, {
+          query: query,
+          responseType: "json"
+        }).then(function(results) {
+          // Parse the results of your custom search
+          var searchResults = results.data.features.map(function(feature) {
+            // Create a Graphic the Search widget can display
+            var graphic = new Graphic({
+              geometry: new Point({
+                x: feature.geometry.coordinates[0],
+                y: feature.geometry.coordinates[1]
+              }),
+              attributes: feature.properties
+            });
+            // Optionally, you can provide an extent for
+            // a point result, so the view can zoom to it
+            var buffer = geometryEngine.geodesicBuffer(
+              graphic.geometry,
+              100,
+              "meters"
+            );
+            // Return a Search Result
+            var searchResult = {
+              extent: buffer.extent,
+              feature: graphic,
+              name: feature.properties.label
+            };
+            return searchResult;
+          });
+
+          // Return an array of Search Results
+          return searchResults;
+        });
+      }
+    });
+  </script>
+</head>
+
+<body>
+  <div id="viewDiv"></div>
+</body>
+
+</html>
