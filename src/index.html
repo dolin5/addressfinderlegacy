@@ -1,5 +1,4 @@
 <html>
-
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
@@ -8,7 +7,7 @@
   For more information about the widgets-search-multiplesource sample, read the original sample description at developers.arcgis.com.
   https://developers.arcgis.com/javascript/latest/sample-code/widgets-search-multiplesource/index.html
   -->
-  <title>Search widget with multiple sources - 4.12</title>
+  <title>Gallatin County Address Finder</title>
 
   <style>
     html,
@@ -44,7 +43,7 @@
 
       var map = new WebMap({
         portalItem: {
-          id: "abbe4d6454854f4bab38d82b54a359e9"
+          id: "7e05c274552f4c339441b26ee5101e2b"
         }
       });
 
@@ -55,9 +54,7 @@
         scale: 200000
       });
       map.load().then(function() {
-        console.log(map);
         var sourcePromises = [];
-
         map.layers.forEach(function(layer, index) {
           if (layer.title === "Structures"){
             sourcePromises.push(getOldAddressesSearchLayerData(layer));
@@ -71,7 +68,7 @@
             searchSourceLayers.push(layer);
           }
         })
-        promiseUtils.eachAlways(sourcePromises).then(buildSearchLayers).then(updateSources);
+        promiseUtils.eachAlways(sourcePromises).then(buildSearchLayers).then(buildSearchWidget);
 
         addressMasterTable = new FeatureLayer({
           url: map.tables[0].url
@@ -83,14 +80,13 @@
       searchWidget = new Search({
         view: view,
         allPlaceholder: "wait...",
-        includeDefaultSources: false,
-        state: "disabled",
-        autoSelect: false
+        includeDefaultSources: false, 
+        maxSuggestions: 6,
+        maxResults: 6
       });
 
-
-      searchWidget.on("search-start", function(event) {
-        console.log(event);
+      searchWidget.on("select-result",function(event){
+        view.goTo({target:event.result.feature.geometry,scale:1000});
       });
 
       // Add the search widget to the top left corner of the view
@@ -117,26 +113,28 @@
       }
 
       function buildSearchLayers(results) {
-        return results.map(function(response, index) {
+        var sourceLayers = results.map(function(response, index) {
           console.log(response);
           console.log(searchSourceLayers);
           var fullAddressFieldObject = Object.assign(response.value.fields[3]);
           fullAddressFieldObject.name = "FULLADDRESS";
           fullAddressFieldObject.alias = "FULLADDRESS";
-          response.value.features.forEach(function(feature) {
+          var features = response.value.features.map(function(feature) {
             feature.attributes["FULLADDRESS"] = fullAddressMaker(feature,searchSourceLayers[index].title);
+            return feature;
           });
           var sourceLayer = new FeatureLayer({
-            source: response.value.features,
+            source: features,
             fields: response.value.fields.concat(fullAddressFieldObject),
             outFields: ["*"],
             objectIdField: "OBJECTID",
             title: searchSourceLayers[index].title,
-            visible: true
+            visible: false
           });
           map.layers.add(sourceLayer);
           return sourceLayer;
         });
+        return sourceLayers;
       };
 
       function fullAddressMaker(feature,title) {
@@ -158,91 +156,43 @@
         return fullAddress;
       }
 
-      function updateSources(layers) {
+      function buildSearchWidget(layers) {
         searchWidget.sources = layers.reverse().map(function(layer, index) {
           return {
             layer: layer,
             searchFields: ["FULLADDRESS"],
             suggestionTemplate: "{FULLADDRESS}",
-            name: layer.title,
-            maxSuggestions: 6,
-            maxResults: 6,
-            placeholder: "311 w main st",
+            exactMatch: true,              
             outFields: ["*"],
-            zoomScale: 1000,
-            exactMatch: false,
-            suggestionsEnabled: true,
-            getSuggestions: getSuggestions
+            placeholder: "example: 1",
+            name: layer.title,
+            zoomScale: 10      
           };
         });
         searchWidget.allPlaceholder = "311 w main st";
       };
 
-      function getSuggestions(params) {
-        var someFunction = function(items, params) {
-          return new Promise(function(resolve, reject) {
-            var results = items.filter(function(feature) {
-              return feature.attributes.FULLADDRESS.startsWith(params.suggestTerm.toUpperCase())
-            }).slice(0, 7).map(function(feature) {
-              return {
-                key: "FULLADDRESS",
-                text: feature.attributes.FULLADDRESS,
-                index: params.sourceIndex
-              }
-            });
-            resolve(results);
-          });
-        }
-        return someFunction(this.layer.source.items, params);
-      }
+      // function getSuggestions(params) {
+      //   var someFunction = function(items, params) {
+      //     return new Promise(function(resolve, reject) {
+      //       var results = items.filter(function(feature) {
+      //         return feature.attributes.FULLADDRESS.startsWith(params.suggestTerm.toUpperCase())
+      //       }).slice(0, 7).map(function(feature) {
+      //         return {
+      //           key: "name",
+      //           text: feature.attributes.FULLADDRESS,
+      //           index: params.sourceIndex
+      //         }
+      //       });
+      //       resolve(results);
+      //     });
+      //   }
+      //   return someFunction(this.layer.source.items, params);
+      // }
 
       function getResults(params) {
-        // If the Search widget passes the current location,
-        // you can use this in your own custom source
-        var operation = params.location ? "reverse/" : "search/";
-        var query = {};
-        // You can perform a different query if a location
-        // is provided
-        if (params.location) {
-          query.lat = params.location.latitude;
-          query.lon = params.location.longitude;
-        } else {
-          query.q = params.suggestResult.text.replace(/ /g, "+");
-          query.limit = 6;
-        }
-        return esriRequest(url + operation, {
-          query: query,
-          responseType: "json"
-        }).then(function(results) {
-          // Parse the results of your custom search
-          var searchResults = results.data.features.map(function(feature) {
-            // Create a Graphic the Search widget can display
-            var graphic = new Graphic({
-              geometry: new Point({
-                x: feature.geometry.coordinates[0],
-                y: feature.geometry.coordinates[1]
-              }),
-              attributes: feature.properties
-            });
-            // Optionally, you can provide an extent for
-            // a point result, so the view can zoom to it
-            var buffer = geometryEngine.geodesicBuffer(
-              graphic.geometry,
-              100,
-              "meters"
-            );
-            // Return a Search Result
-            var searchResult = {
-              extent: buffer.extent,
-              feature: graphic,
-              name: feature.properties.label
-            };
-            return searchResult;
-          });
-
-          // Return an array of Search Results
-          return searchResults;
-        });
+        console.log("getresults:");
+        console.log(params);
       }
     });
   </script>
