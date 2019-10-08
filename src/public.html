@@ -1,0 +1,163 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="initial-scale=1,maximum-scale=1,user-scalable=no"
+    />
+    <!--
+     ArcGIS API for JavaScript, https://js.arcgis.com
+     For more information about the widgets-search-multiplesource sample,
+     read the original sample description at developers.arcgis.com.
+     https://developers.arcgis.com/javascript/latest/sample-code/widgets-search-multiplesource/index.html
+     -->
+    <title>Search widget with multiple sources - 4.12</title>
+
+    <style>
+      html,
+      body,
+      #viewDiv {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+      }
+    </style>
+
+    <link
+      rel="stylesheet"
+      href="https://js.arcgis.com/4.12/esri/themes/light/main.css"
+    />
+    <script src="https://js.arcgis.com/4.12/"></script>
+
+    <script>
+      require([
+        "esri/Map",
+        "esri/views/MapView",
+        "esri/layers/FeatureLayer",
+        "esri/widgets/Search"
+      ], function(Map, MapView, FeatureLayer, Search) {
+        var map = new Map({
+          basemap: "dark-gray"
+        });
+
+        var view = new MapView({
+          container: "viewDiv",
+          map: map,
+          center: [-111.15, 45.6], // lon, lat
+          scale: 1000000
+        });
+      
+
+        var featureLayerSenators = new FeatureLayer({
+          //url:"http://gis.gallatin.mt.gov/arcgis/rest/services/utils/address_lookup/MapServer/0",
+          portalItem:{
+            //id: "15bbc0736ed546708b5a064800e89077" private
+            id: "a078175a6cb94a91a12d0bb880f66868"
+          },
+          popupTemplate: {
+            // autocasts as new PopupTemplate()
+            title:
+              "{ADDRESS} {ROADNAME}",
+            overwriteActions: true
+          }
+        });
+        
+        featureLayerSenators.when(
+          function(layer){
+            var searchQuery = layer.createQuery();
+            searchQuery.where = "1=1";
+            searchQuery.outSpatialReference = view.spatialReference;
+            searchQuery.outFields = ["OBJECTID", "ADDRESS", "DIRPRE", "ROADNAME", "ROADTYPE", "DIRSUF","LV_APT"];
+            layer.queryFeatures(searchQuery).then(
+              function(results){
+                var fullAddressFieldObject = Object.assign(results.fields[3]);
+                fullAddressFieldObject.name = "FULLADDRESS";
+                fullAddressFieldObject.alias = "FULLADDRESS";
+                var features = results.features.map(function(feature, index) {                 
+                  feature.attributes["FULLADDRESS"] = fullAddressMaker(feature,"SHIT");
+                  return feature;
+                });                
+                var sourceLayer = new FeatureLayer({ 
+                  source: features,
+                  fields: results.fields.concat(fullAddressFieldObject),
+                  outFields: ["*"],
+                  objectIdField: "OBJECTID",
+                  title: layer.title,
+                  visible: true
+                });
+                map.layers.add(sourceLayer);
+                searchWidget.sources.push({
+                  layer: sourceLayer,
+                  searchFields: ["FULLADDRESS"],
+                  suggestionTemplate: "{FULLADDRESS}",
+                  name: layer.title,
+                  maxSuggestions: 6,
+                  maxResults: 6, 
+                  placeholder: "311 w main st",
+                  outFields: ["*"],
+                  zoomScale: 1000,
+                  exactMatch: false,
+                  suggestionsEnabled: true
+                })               
+              }              
+            );
+          }
+        );
+        
+
+        var searchWidget = new Search({
+          view: view,
+          allPlaceholder: "District or Senator",
+          includeDefaultSources: false,
+          sources: [            
+            {
+              layer: featureLayerSenators,
+              searchFields: ["ADDRESS", "ROADNAME"],
+              suggestionTemplate: "{ADDRESS}, Party: {ROADNAME}",
+              exactMatch: false,
+              outFields: ["*"],
+              placeholder: "example: 1",
+              name: "Senators",
+              zoomScale: 10         
+            }
+          ]
+        });
+        
+        
+
+        // Add the search widget to the top left corner of the view
+        view.ui.add(searchWidget, {
+          position: "top-right"
+        });
+        searchWidget.on("select-result",function(event){
+          console.log(event);
+        });
+        
+        function fullAddressMaker(feature,title) {
+          var attributes = feature.attributes
+          Object.keys(attributes).forEach(function(key) {
+            if (attributes[key] === null) {
+              attributes[key] = '';
+            }
+            if (typeof attributes[key].replace === 'function') {
+              attributes[key] = attributes[key].replace(/  +/g, ' ').trim();
+            }
+          })
+          var fullAddress;
+          if (title == "Old Addresses"){
+            fullAddress = (attributes.OLD_ADDRESS + " " + attributes.OLD_DIRPRE + " " + attributes.OLD_ROADNAME + " " + attributes.OLD_ROADTYPE + " " + attributes.OLD_DIRSUF).replace(/  +/g, ' ').trim();        
+          } else {
+            fullAddress = (attributes.ADDRESS + " " + attributes.DIRPRE + " " + attributes.ROADNAME + " " + attributes.ROADTYPE + " " + attributes.DIRSUF + " " + attributes.LV_APT).replace(/  +/g, ' ').trim();        
+          }
+          return fullAddress;
+        }
+        
+      });
+    </script>
+  </head>
+
+  <body>
+    <div id="viewDiv"></div>
+  </body>
+</html>

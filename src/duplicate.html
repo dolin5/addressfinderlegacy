@@ -1,0 +1,110 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="initial-scale=1,maximum-scale=1,user-scalable=no"
+    />
+    <!--
+  ArcGIS API for JavaScript, https://js.arcgis.com
+  For more information about the widgets-search-customsource sample, read the original sample description at developers.arcgis.com.
+  https://developers.arcgis.com/javascript/latest/sample-code/widgets-search-customsource/index.html
+  -->
+<title>Search widget with custom source - 4.12</title>
+
+    <style>
+      html,
+      body,
+      #viewDiv {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+      }
+    </style>
+
+    <link
+      rel="stylesheet"
+      href="https://js.arcgis.com/4.12/esri/themes/light/main.css"
+    />
+    <script src="https://js.arcgis.com/4.12/"></script>
+
+    <script>
+      require([
+        "esri/Map",
+        "esri/Graphic",
+        "esri/request",
+        "esri/views/MapView",
+        "esri/widgets/Search",
+        "esri/widgets/Search/SearchSource",
+        "esri/geometry/geometryEngine",
+        "esri/layers/FeatureLayer",
+        "esri/geometry/Point"
+      ], function(
+        Map,
+        Graphic,
+        esriRequest,
+        MapView,
+        Search,
+        SearchSource,
+        geometryEngine,
+        FeatureLayer,
+        Point
+      ) {
+        // An open data address search API for France
+        var url = "https://api-adresse.data.gouv.fr/";
+
+
+        var sourceLayer = new FeatureLayer({
+          url: "https://services3.arcgis.com/JuknJLoAEm9DTWXh/arcgis/rest/services/ng911_structures/FeatureServer/0",            
+          visible: true
+        });
+        
+        sourceLayer.when(makeSourceLayer);
+
+        var map = new Map({
+          basemap: "streets"
+        });
+
+        map.layers.add(sourceLayer);
+
+
+        var view = new MapView({
+          container: "viewDiv",
+          map: map,
+          center: [-111.21, 45.72], // lon, lat
+          scale: 300000
+        });
+
+        // Create Search widget using custom SearchSource
+        var searchWidget = new Search({
+          view: view,
+          includeDefaultSources: false
+        });
+
+        // Add the search widget to the top left corner of the view
+        view.ui.add(searchWidget, {
+          position: "top-right"
+        });
+
+        function makeSourceLayer(layer){
+          var customSearchSource = new SearchSource({
+            layer:layer,
+            placeholder: "example: motherfucker",
+            searchFields: ["ADDRESS"],
+            name: layer.title,
+            exactMatch: false,
+            outFields: ["*"],
+            suggestionTemplate: "{ADDRESS}",
+            suggestionsEnabled: true          
+          });
+          searchWidget.sources.push(customSearchSource);
+        }
+      });
+    </script>
+  </head>
+
+  <body>
+    <div id="viewDiv"></div>
+  </body>
+</html>
